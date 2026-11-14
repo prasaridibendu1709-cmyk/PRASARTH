@@ -1,4 +1,4 @@
-"""Builds the advice sheet PDF in English, Hindi or Bengali (uses fpdf2)."""
+"""Builds the printable plan PDF in English, Hindi or Bengali (uses fpdf2)."""
 from __future__ import annotations
 
 import io
@@ -11,10 +11,13 @@ from fpdf.fonts import FontFace
 import engine
 import i18n
 
-FONT_DIR = Path(__file__).with_name("fonts")
+BASE = Path(__file__).parent
+FONT_DIR = BASE / "fonts"
+LOGO = BASE / "assets" / "logo.png"
 FONT_PREFIX = {"en": "NotoSans", "hi": "NotoSansDevanagari", "bn": "NotoSansBengali"}
 
 GREEN = (27, 127, 75)
+DARK = (15, 81, 50)
 LIGHT_GREEN = (232, 245, 238)
 RATING_FILL = {"low": (254, 226, 226), "medium": (254, 243, 199), "high": (220, 252, 231)}
 
@@ -24,12 +27,7 @@ class MissingFontError(Exception):
 
 
 def _find_font(prefix: str) -> Path | None:
-    for pattern in (
-        f"{prefix}-Regular.ttf",
-        f"{prefix}-*Regular*.ttf",
-        f"{prefix}[[]*.ttf",
-        f"{prefix}-VariableFont*.ttf",
-    ):
+    for pattern in (f"{prefix}-Regular.ttf", f"{prefix}-*Regular*.ttf", f"{prefix}[[]*.ttf", f"{prefix}-VariableFont*.ttf"):
         hits = sorted(FONT_DIR.glob(pattern))
         if hits:
             return hits[0]
@@ -55,18 +53,17 @@ def _setup_fonts(pdf: _PDF, lang: str) -> None:
     if latin is None and lang != "en":
         missing.append(f"{FONT_PREFIX['en']}-Regular.ttf")
     if missing:
-        raise MissingFontError(
-            "Missing font file(s) in the 'fonts' folder: " + ", ".join(missing)
-        )
+        raise MissingFontError("Missing font file(s) in the 'fonts' folder: " + ", ".join(missing))
     pdf.add_font("main", "", str(main))
     if lang != "en":
-        # Latin letters (DAP, MOP, KVK, numbers) come from Noto Sans.
-        pdf.add_font("latin", "", str(latin))
+        pdf.add_font("latin", "", str(latin))  # Latin letters, digits and the rupee sign
         pdf.set_fallback_fonts(["latin"])
     pdf.set_text_shaping(True)  # needed for Hindi / Bengali conjuncts
 
 
 def _section(pdf: _PDF, text: str) -> None:
+    if pdf.get_y() > 255:
+        pdf.add_page()
     pdf.ln(3)
     pdf.set_font("main", size=12)
     pdf.set_fill_color(*LIGHT_GREEN)
@@ -76,16 +73,13 @@ def _section(pdf: _PDF, text: str) -> None:
     pdf.ln(1.5)
 
 
-def _table(pdf: _PDF, widths, rows, header=None, fills=None, aligns=None) -> None:
-    pdf.set_font("main", size=10)
+def _table(pdf: _PDF, widths, rows, header=None, fills=None, size=10) -> None:
+    pdf.set_font("main", size=size)
     fills = fills or {}
     with pdf.table(
-        col_widths=widths,
-        line_height=6.5,
-        text_align=aligns or "LEFT",
+        col_widths=widths, line_height=6.2, text_align="LEFT",
         headings_style=FontFace(color=(255, 255, 255), fill_color=GREEN),
-        borders_layout="ALL",
-        first_row_as_headings=header is not None,
+        borders_layout="ALL", first_row_as_headings=header is not None,
     ) as table:
         if header is not None:
             row = table.row()
@@ -108,7 +102,6 @@ def _range_text(lo: float, hi: float) -> str:
 
 def _compress_photo(raw: bytes) -> io.BytesIO:
     from PIL import Image, ImageOps
-
     img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGB")
     img.thumbnail((1100, 1100))
     buf = io.BytesIO()
@@ -117,46 +110,74 @@ def _compress_photo(raw: bytes) -> io.BytesIO:
     return buf
 
 
+def _rupees(x: float) -> str:
+    return "-" if x < 0.5 else f"{round(x):,}"
+
+
 def build_pdf(report: dict, lang: str) -> bytes:
-    """report keys: farmer, village, block, test_date (date), scan_id, soil,
-    texture, ratings, crop (row from crops.csv), season, area, unit, rec,
-    advice_items, photo (bytes or None), today (date)."""
     ui = i18n.UI[lang]
-    crop = report["crop"]
-    rec = report["rec"]
+    pn = i18n.PRODUCT_NAMES[lang]
+    crop, plan = report["crop"], report["plan"]
 
     pdf = _PDF(format="A4")
     pdf.set_margins(12, 12, 12)
     pdf.set_auto_page_break(True, margin=16)
     _setup_fonts(pdf, lang)
-    pdf.footer_text = "ScaNxt BhuParikshak"
+    pdf.footer_text = f"{ui['app_name']} - {i18n.ORG_NAME}"
     pdf.add_page()
 
-    # Title bar
-    pdf.set_font("main", size=18)
-    pdf.set_fill_color(*GREEN)
+    # ---- header band with logo ------------------------------------------------
+    pdf.set_fill_color(*DARK)
+    pdf.rect(0, 0, 210, 30, style="F")
+    x_text = 12
+    if LOGO.exists():
+        try:
+            pdf.set_fill_color(255, 255, 255)
+            pdf.rect(10, 5, 22, 20, style="F")
+            pdf.image(str(LOGO), x=11, y=6, h=18)
+            x_text = 36
+        except Exception:
+            x_text = 12
+    pdf.set_xy(x_text, 6)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 14, ui["pdf_title"], fill=True, align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_font("main", size=19)
+    pdf.cell(0, 9, ui["pdf_title"], new_x=XPos.LEFT, new_y=YPos.NEXT)
+    pdf.set_x(x_text)
+    pdf.set_font("main", size=10)
+    pdf.cell(0, 6, f"{ui['app_name']}  |  {ui['org_line']}", new_x=XPos.LEFT, new_y=YPos.NEXT)
     pdf.set_text_color(30, 30, 30)
-    pdf.ln(3)
+    pdf.set_y(34)
 
-    # Farmer details
-    rows = [
-        (ui["farmer_name"], report["farmer"]),
-        (ui["village"], report["village"] or "-"),
-        (ui["block"], report["block"] or "-"),
-        (ui["scan_date"], report["test_date"].strftime("%d-%m-%Y")),
-    ]
+    # ---- farmer ---------------------------------------------------------------
+    rows = [(ui["farmer_name"], report["farmer"])]
+    if report.get("mobile"):
+        rows.append((ui["mobile"], report["mobile"]))
+    rows.append((ui["village"] + " / " + ui["block"], " / ".join(x for x in (report["village"], report["block"]) if x) or "-"))
+    if report.get("plot"):
+        rows.append((ui["plot"], report["plot"]))
+    rows.append((ui["scan_date"], report["test_date"].strftime("%d-%m-%Y")))
     if report.get("scan_id"):
         rows.append((ui["scan_id"].split(" (")[0], report["scan_id"]))
     rows.append((ui["pdf_advice_date"], report["today"].strftime("%d-%m-%Y")))
-    _table(pdf, (55, 131), rows)
+    _table(pdf, (62, 124), rows)
 
-    # Soil test result
+    # ---- place ----------------------------------------------------------------
+    _section(pdf, ui["pdf_place"])
+    zone = engine.ZONES[report["zone"]]
+    state_name = i18n.STATE_NAMES[lang][report["state"]]
+    place_rows = [
+        (ui["state"] + " / " + ui["district"], f"{state_name} / {report['district']}"),
+        (ui["zone_label"], i18n.ZONE_NAMES[lang][report["zone"]]),
+        (ui["rain_label"], zone["rain"]),
+        (ui["ph_typ"], zone["ph"] or ui["ph_unknown"]),
+    ]
+    _table(pdf, (62, 124), place_rows)
+
+    # ---- soil -----------------------------------------------------------------
     _section(pdf, ui["pdf_soil"])
     soil_rows, fills = [], {}
     for key in ("n", "oc", "clay", "k", "p", "cec"):
-        if key not in report["soil"]:  # clay / CEC are optional
+        if key not in report["soil"]:
             continue
         lo, hi = report["soil"][key]
         rating = report["ratings"].get(key)
@@ -164,71 +185,111 @@ def build_pdf(report: dict, lang: str) -> bytes:
             rating_text = ui["r_" + rating]
             fills[(len(soil_rows), 2)] = FontFace(fill_color=RATING_FILL[rating])
         else:
-            rating_text = report.get("texture") or "-" if key == "clay" else "-"
+            rating_text = (report.get("texture") or "-") if key == "clay" else "-"
         soil_rows.append((ui["p_" + key], _range_text(lo, hi), rating_text))
+    if report.get("ph") is not None:
+        soil_rows.append(("pH", _g(report["ph"]), "-"))
     _table(pdf, (80, 55, 51), soil_rows, header=(ui["col_param"], ui["col_value"], ui["col_rating"]), fills=fills)
 
-    # Crop and land
+    # ---- crop -----------------------------------------------------------------
     _section(pdf, ui["pdf_crop"])
-    area_text = f"{_g(report['area'])} {ui['unit_' + report['unit']]}"
-    d = rec["dose_ha"]
+    d = plan["dose_ha"]
     crop_rows = [
         (ui["crop"], crop["names"][lang]),
         (ui["season"], ui["season_" + report["season"]]),
-        (ui["area"], area_text),
+        (ui["area"], f"{_g(report['area'])} {ui['unit_' + report['unit']]}"),
+        (ui["approach"], ui["ap_" + plan["approach"]].lstrip("🧪🌗🌿🐄 ")),
         (ui["pdf_dose"], f"N {d['n']:.0f}  |  P2O5 {d['p']:.0f}  |  K2O {d['k']:.0f}"),
     ]
     _table(pdf, (80, 106), crop_rows)
 
-    # Fertiliser schedule
-    _section(pdf, ui["pdf_fert"])
-    sched_rows = []
-    for step in rec["schedule"]:
-        when = ui["when_basal"] if step["days"] == 0 else ui["when_days"].format(d=step["days"])
-        sched_rows.append(
-            (
-                when,
-                engine.fmt_amount(step["fym"]),
-                engine.fmt_amount(step["dap"]),
-                engine.fmt_amount(step["mop"]),
-                engine.fmt_amount(step["urea"]),
-            )
-        )
-    t = rec["totals"]
-    sched_rows.append(
-        (
-            ui["row_total"],
-            engine.fmt_amount(t["fym"]),
-            engine.fmt_amount(t["dap"]),
-            engine.fmt_amount(t["mop"]),
-            engine.fmt_amount(t["urea"]),
-        )
-    )
-    last = len(sched_rows) - 1
-    total_fill = {(last, j): FontFace(fill_color=LIGHT_GREEN) for j in range(5)}
-    _table(
-        pdf,
-        (56, 32, 30, 32, 36),
-        sched_rows,
-        header=(ui["col_when"], ui["col_fym"], ui["col_dap"], ui["col_mop"], ui["col_urea"]),
-        fills=total_fill,
-    )
+    # ---- shopping list --------------------------------------------------------
+    _section(pdf, ui["pdf_buy"])
+    order = ["fym", "urea", "dap", "mop", "oilcake", "rockp", "bonem", "ash", "lime", "gjm", "jeev",
+             "wsf192", "mkp", "kno3", "cano3", "borax", "znso4", "micro", "dap2", "urea2", "jeevs", "panch", "vwash"]
+    buy_rows = []
+    for key in order:
+        q = plan["all_totals"].get(key, 0)
+        if q <= 0:
+            continue
+        price = engine.PRODUCTS[key]["price"]
+        buy_rows.append((pn[key], engine.fmt_qty(key, q), engine.bags_text(key, q), _rupees(price * q)))
+    buy_rows.append((ui["total_cost"], "", "", _rupees(plan["cost"])))
+    last = len(buy_rows) - 1
+    total_fill = {(last, j): FontFace(fill_color=LIGHT_GREEN) for j in range(4)}
+    _table(pdf, (86, 40, 24, 36), buy_rows,
+           header=(ui["col_product"], ui["col_qty"], ui["col_bags"], ui["col_cost"]), fills=total_fill)
+    pdf.set_font("main", size=8)
+    pdf.set_text_color(110, 110, 110)
+    pdf.multi_cell(0, 4.5, ui["cost_note"], new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_text_color(30, 30, 30)
 
-    # Special advice
+    if plan.get("coverage") and plan["approach"] == "organic":
+        c = plan["coverage"]
+        pdf.ln(1)
+        pdf.set_font("main", size=10)
+        pdf.multi_cell(0, 5.5, f"{ui['cov_title']}:  {ui['cov_n']} {c['n']:.0f}%  |  {ui['cov_p']} {c['p']:.0f}%  |  {ui['cov_k']} {c['k']:.0f}%",
+                       new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
+    # ---- schedule -------------------------------------------------------------
+    _section(pdf, ui["pdf_when"])
+    sched_rows = []
+    for st in plan["stages"]:
+        if not st["items"]:
+            continue
+        when = ui["when_basal"] if st["days"] == 0 else ui["when_days"].format(d=st["days"])
+        for i, (key, q) in enumerate(st["items"]):
+            sched_rows.append((when if i == 0 else "", pn[key], engine.fmt_qty(key, q)))
+    _table(pdf, (62, 84, 40), sched_rows, header=(ui["col_when"], ui["col_product"], ui["col_qty"]))
+
+    # ---- sprays ---------------------------------------------------------------
+    _section(pdf, ui["pdf_spray"])
+    if plan["sprays"]:
+        sp_rows = []
+        for sp in plan["sprays"]:
+            name = pn[sp["product"]] + (("  " + ui[sp["extra"]]) if sp["extra"] else "")
+            sp_rows.append((
+                ui["stg_" + sp["stage"]], name,
+                f"{_g(sp['per_pump'])} {sp['unit']}",
+                f"{engine.fmt_qty(sp['product'], sp['total_qty'])}  ({sp['pumps']} {ui['sp_pumps']})",
+            ))
+        _table(pdf, (44, 66, 34, 42), sp_rows, header=(ui["sp_stage"], ui["sp_product"], ui["sp_pump"], ui["sp_total"]), size=9)
+    else:
+        pdf.set_font("main", size=10)
+        pdf.cell(0, 6, ui["sp_none"], new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
+    # ---- advice ---------------------------------------------------------------
     _section(pdf, ui["pdf_advice"])
     pdf.set_font("main", size=10)
     for line in i18n.render_advice(lang, report["advice_items"], crop):
+        if pdf.get_y() > 265:
+            pdf.add_page()
+            pdf.set_font("main", size=10)
         pdf.set_x(14)
         pdf.multi_cell(0, 5.8, "•  " + line, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(1)
 
-    # Disclaimer
-    pdf.ln(2)
+    # ---- signatures + disclaimer ------------------------------------------------
+    if pdf.get_y() > 235:
+        pdf.add_page()
+    pdf.ln(6)
+    pdf.set_font("main", size=10)
+    y = pdf.get_y()
+    pdf.line(14, y + 12, 90, y + 12)
+    pdf.line(120, y + 12, 196, y + 12)
+    pdf.set_xy(14, y + 13)
+    pdf.cell(76, 5, f"{ui['sign_prepared']}: {report.get('prepared_by') or ''}")
+    pdf.set_xy(120, y + 13)
+    pdf.cell(76, 5, ui["sign_farmer"])
+    if report.get("shg"):
+        pdf.set_xy(14, y + 19)
+        pdf.cell(76, 5, report["shg"])
+    pdf.set_y(y + 27)
     pdf.set_font("main", size=8.5)
     pdf.set_text_color(110, 110, 110)
     pdf.multi_cell(0, 4.8, ui["disclaimer"], new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
-    # Photo of the original report
+    # ---- photo of the original report ------------------------------------------------
     if report.get("photo"):
         pdf.add_page()
         _section(pdf, ui["pdf_photo"])

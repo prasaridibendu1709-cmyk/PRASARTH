@@ -1,39 +1,52 @@
-# Soil Test → Fertiliser Advice (English / हिन्दी / বাংলা)
+# Mati Sathi (मिट्टी साथी / মাটির সাথী) - version 2
+Soil test -> complete crop nutrition plan, in English / हिन्दी / বাংলা. A PRASARI initiative.
+(The app name is only a suggestion. Change it in `i18n.py`, the `app_name` line.)
 
-A free web app. Staff or farmers upload the ScaNxt BhuParikshak report photo, pick the crop, season and land area, and download a PDF advice sheet.
+## What is new in version 2
+* New look: header with the PRASARI logo and app name, 3-step strip, numbered cards, colour chips for Low / Medium / High.
+* **Four ways to feed the soil:** Chemical, Partial organic (about 25% less chemical + compost + bio-fertiliser), Complete organic (compost, oil-cake, rock phosphate / bone meal, ash) and Natural farming (Jeevamrit).
+* **Special sprays:** water-soluble 19:19:19, 0:52:34, 13:0:45, calcium nitrate, borax, zinc sulphate, multi-micronutrients, DAP/urea 2% for pulses; for organic and natural farming: Jeevamrit, Panchagavya, Vermiwash. Sprays for a nutrient the soil already has in plenty are left out. Mix quantity is given per 15-litre pump.
+* **Shopping list** with bags and an approximate cost, plus **When to apply** schedule.
+* **State and district:** West Bengal (23 districts + 4 announced new ones), Jharkhand (24), Meghalaya (12). Each district maps to a farming zone with typical rainfall and soil problems (acidity, drought, salinity, heavy rain...), which drives the advice (liming, split doses, mulching, boron/zinc etc.).
+* **Live weather** for the district (free Open-Meteo): last 7 days and next 3 days of rain. Heavy rain coming -> "do not top-dress or spray now".
+* Optional soil pH, rain-fed / irrigated choice, farmer mobile, plot number, "prepared by" (Didi / CRP) and SHG name, with signature lines in the PDF.
 
-## What is inside
+## Files
 | File | Purpose |
 |---|---|
-| `app.py` | The app screen (Streamlit) |
-| `engine.py` | Fertiliser calculation. Settings you may tune are at the top |
-| `crops.csv` | Crop table: doses, split schedule, names and crop advice in 3 languages. Open in Excel/Sheets to edit or add crops |
-| `i18n.py` | All screen and PDF text in 3 languages |
+| `app.py` | The app screen |
+| `engine.py` | All calculations. Settings you may tune are at the top (marked ASSUMPTION) |
+| `crops.csv` | 17 crop rows (doses, split schedule, names and crop advice in 3 languages). Edit in Excel/Sheets |
+| `regions.csv` | All districts: state, district, latitude, longitude, farming zone |
+| `i18n.py` | All text in 3 languages |
 | `pdf_report.py` | Makes the PDF |
-| `fonts/` | You add 3 free font files here (see `fonts/PUT_FONTS_HERE.txt`) |
-| `test_engine.py` | Self-check for the calculation (`python test_engine.py`) |
+| `assets/logo.png` | **You add this:** the PRASARI logo (see below) |
+| `fonts/` | Three Noto font files (already uploaded in version 1) |
+| `test_engine.py` | Self-check for the calculations |
 
-## Set-up (about 30 minutes, all free; do it on a laptop)
-1. **Fonts.** Download Noto Sans, Noto Sans Devanagari and Noto Sans Bengali from https://fonts.google.com/noto and copy the three `...-Regular.ttf` files into `fonts/`.
-2. **GitHub.** Create a free account, make a new repository, upload everything in this folder (keep the folder structure; do not upload any real key).
-3. **Photo reading key (optional but recommended).** Go to https://aistudio.google.com/app/apikey and create a free API key. Without it the app still works, staff just type the numbers from the report. Check Google's current free-tier limits and data terms before using it with real farmer photos.
-4. **Deploy.** Go to https://share.streamlit.io, sign in with GitHub, choose the repository, main file `app.py`, click *Advanced settings → Secrets* and paste:
-   `GEMINI_API_KEY = "your-key"`. Click Deploy.
-5. **Share** the app link (and a QR code) on WhatsApp / at SHG meetings. Free apps may sleep when unused and take about half a minute to wake.
+## How to upgrade your live app (no coding)
+1. Unzip `soil_advisor_v2.zip`. Put the PRASARI logo in the `assets` folder and name it exactly `logo.png` (PNG, preferably square-ish, under 500 KB).
+2. Open your GitHub repository -> **Add file** -> **Upload files**. Drag in everything from the v2 folder **except the `fonts` folder** (your fonts are already there) - include `assets`. Files with the same name are replaced.
+3. Click **Commit changes**. Wait one minute; your Streamlit app updates by itself. If it does not, open the app and choose **Reboot** from the menu.
+4. `crops.csv` has new columns, so it must be replaced (step 2 does that).
 
-If photo reading stops working with a model-name error, add `GEMINI_MODEL = "<current model name from AI Studio>"` to Secrets.
+## Installing the app on a phone
+It is a web app, so there is nothing to download from the Play Store. Add it to the home screen:
+* **Android (Chrome):** open the app link -> tap the **three dots** (top right) -> **Add to Home screen** (or **Install app**) -> Add. An icon appears on the home screen.
+* **iPhone (Safari):** open the link in Safari -> tap **Share** -> **Add to Home Screen** -> Add.
+It opens like an app from the icon, but it **needs an internet connection** (see "Next ideas").
 
-## Run on your own computer instead
+## Before wide use - please validate (important)
+* All doses in `crops.csv` and the rules in `engine.py` are **starting values**, not official recommendations. Have your agronomy team check each crop against BAU Ranchi / ICAR / State Agriculture Department / KVK recommendations.
+* Organic nutrient contents are from standard tables; first-year availability factors, the 25% rule for low/high soil, spray concentrations (e.g. 0.5% = 5 g/L) and all prices are working assumptions (marked ASSUMPTION in `engine.py`). **Prices must be updated from your local market.**
+* The device does not measure pH. The app therefore uses the district's typical soil condition and asks for pH only if someone measured it.
+* District zones are one zone per district for simplicity. Some districts mix zones (for example parts of Murshidabad and Dakshin Dinajpur). Refine `regions.csv` with your field knowledge.
+* West Bengal's four new districts (Basirhat, Sundarbans, Jangipur, Arambagh) were announced in the June 2026 state budget; check whether they have been formally notified. They are marked with * and use the parent area's zone.
+* Hindi and Bengali text should be read once by a native speaker from your team.
+* Open-Meteo is free for non-commercial use; check its current terms before large-scale use.
+
+## Run on your own computer (optional)
 ```
 pip install -r requirements.txt
 streamlit run app.py
 ```
-
-## IMPORTANT before using with farmers
-* The doses in `crops.csv` are **indicative starting values** (typical NPK recommendations for eastern India). Have your agronomy team check each crop against BAU Ranchi / ICAR / state department recommendations and edit the CSV.
-* The soil adjustment (Low +25%, High −25%) and the compost adjustment are simple rules in `engine.py`. Confirm or change them.
-* Rating limits (e.g. N low below 280, P high above 25) copy the ranges printed on the device screen. Phosphorus "low below 11" and the nitrogen "high above 560" limit are standard values, not shown on the screen; confirm them.
-* The device gives indicative values, and the PDF says so.
-
-## Add a new crop
-Add a row in `crops.csv`. `n_split` = share of nitrogen at each stage (e.g. `50:25:25`); `n_days` = days after sowing/planting for each stage (e.g. `0:21:45`). Use `100` and `0` for a single dose at sowing.
