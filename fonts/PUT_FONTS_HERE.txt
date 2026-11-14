@@ -1,0 +1,9 @@
+Put these three font files in this folder (free, from https://fonts.google.com/noto):
+
+  NotoSans-Regular.ttf
+  NotoSansDevanagari-Regular.ttf     (Hindi)
+  NotoSansBengali-Regular.ttf        (Bengali)
+
+How: open each font family on Google Fonts -> "Get font" / "Download all" -> unzip ->
+open the "static" folder -> copy the "...-Regular.ttf" file here.
+Without these files the on-screen advice works but the PDF cannot be made.
