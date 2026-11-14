@@ -11,7 +11,7 @@ ORG_NAME = "PRASARI"
 
 _T = {
     # ---- name, header ------------------------------------------------------
-    "app_name": ("Mati Sathi", "मिट्टी साथी", "মাটির সাথী"),
+    "app_name": ("PRASARTH"),
     "app_tag": (
         "Soil test to complete crop nutrition plan",
         "मिट्टी जांच से पूरी फसल पोषण योजना",
