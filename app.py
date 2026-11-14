@@ -1,4 +1,4 @@
-"""Mati Sathi - soil test to complete crop nutrition plan (English / Hindi / Bengali).
+"""PRASARTH - soil test to complete crop nutrition plan (English / Hindi / Bengali).
 
 Run locally:  streamlit run app.py
 """
@@ -32,7 +32,7 @@ def _page_icon():
     return "🌱"
 
 
-st.set_page_config(page_title="Mati Sathi - PRASARI", page_icon=_page_icon(), layout="centered")
+st.set_page_config(page_title="PRASARTH", page_icon=_page_icon(), layout="centered")
 
 SOIL_FIELDS = ["n", "oc", "clay", "k", "p", "cec"]
 API_NAME = {"n": "nitrogen", "oc": "organic_carbon", "clay": "clay", "k": "potassium", "p": "phosphorus", "cec": "cec"}
