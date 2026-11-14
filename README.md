@@ -1,4 +1,4 @@
-# Mati Sathi (मिट्टी साथी / মাটির সাথী) - version 2
+# PRASARTH - version 2
 Soil test -> complete crop nutrition plan, in English / हिन्दी / বাংলা. A PRASARI initiative.
 (The app name is only a suggestion. Change it in `i18n.py`, the `app_name` line.)
 
